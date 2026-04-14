@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mój Monitor Finansów</title>
+    <style>
+        :root {
+            --bg-color: #f4f7f6;
+            --primary: #2c3e50;
+            --income: #27ae60;
+            --expense: #c0392b;
+            --card-bg: #ffffff;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--primary);
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 { text-align: center; }
+        .summary-container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .summary-card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            flex: 1;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .summary-card h3 { margin-top: 0; font-size: 1.1em; color: #7f8c8d; }
+        .summary-card .amount { font-size: 1.8em; font-weight: bold; }
+        .positive { color: var(--income); }
+        .negative { color: var(--expense); }
+        
+        .form-container, .history-container {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+        .form-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        input, select, button {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1em;
+        }
+        input[type="number"] { flex: 1; min-width: 150px; }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background 0.3s;
+            font-weight: bold;
+        }
+        button:hover { background-color: #2980b9; }
+        
+        .history-list { list-style: none; padding: 0; margin: 0; }
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+        .history-item:last-child { border-bottom: none; }
+        .btn-delete {
+            background-color: var(--expense);
+            padding: 5px 10px;
+            font-size: 0.9em;
+        }
+        .btn-delete:hover { background-color: #a53125; }
+    </style>
+</head>
+<body>
+
+    <h1>Monitor Finansów</h1>
+
+    <div class="summary-container">
+        <div class="summary-card">
+            <h3>Dzisiaj</h3>
+            <div id="sum-daily" class="amount">0 zł</div>
+        </div>
+        <div class="summary-card">
+            <h3>Ostatnie 7 dni</h3>
+            <div id="sum-weekly" class="amount">0 zł</div>
+        </div>
+        <div class="summary-card">
+            <h3>Ten Miesiąc</h3>
+            <div id="sum-monthly" class="amount">0 zł</div>
+        </div>
+    </div>
+
+    <div class="form-container">
+        <h2>Dodaj wpis</h2>
+        <form id="finance-form">
+            <div class="form-group">
+                <select id="type">
+                    <option value="income">Zarobek (+)</option>
+                    <option value="expense">Strata (-)</option>
+                </select>
+                <input type="number" id="amount" placeholder="Kwota (zł)" step="0.01" required min="0.01">
+                <input type="date" id="date" required>
+                <button type="submit">Zapisz</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="history-container">
+        <h2>Historia transakcji</h2>
+        <ul class="history-list" id="history-list">
+            </ul>
+    </div>
+
+    <script>
+        // Inicjalizacja danych z LocalStorage
+        let transactions = JSON.parse(localStorage.getItem('finance_data')) || [];
+
+        // Ustaw dzisiejszą datę jako domyślną w formularzu
+        document.getElementById('date').valueAsDate = new Date();
+
+        const form = document.getElementById('finance-form');
+        const historyList = document.getElementById('history-list');
+
+        // Obsługa wysłania formularza
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const type = document.getElementById('type').value;
+            const amount = parseFloat(document.getElementById('amount').value);
+            const date = document.getElementById('date').value;
+
+            const transaction = {
+                id: Date.now(), // Unikalny ID na podstawie czasu
+                type: type,
+                amount: amount,
+                date: date
+            };
+
+            transactions.push(transaction);
+            saveData();
+            updateUI();
+            form.reset();
+            document.getElementById('date').valueAsDate = new Date(); // Reset daty do dzisiaj
+        });
+
+        // Usuwanie transakcji
+        function deleteTransaction(id) {
+            transactions = transactions.filter(t => t.id !== id);
+            saveData();
+            updateUI();
+        }
+
+        // Zapis do LocalStorage
+        function saveData() {
+            localStorage.setItem('finance_data', JSON.stringify(transactions));
+        }
+
+        // Aktualizacja widoku
+        function updateUI() {
+            renderHistory();
+            calculateSummaries();
+        }
+
+        // Rysowanie listy historii
+        function renderHistory() {
+            historyList.innerHTML = '';
+            
+            // Sortuj od najnowszych
+            const sortedTransactions = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+            sortedTransactions.forEach(t => {
+                const li = document.createElement('li');
+                li.className = 'history-item';
+                const sign = t.type === 'income' ? '+' : '-';
+                const colorClass = t.type === 'income' ? 'positive' : 'negative';
+                
+                li.innerHTML = `
+                    <div>
+                        <strong>${t.date}</strong> 
+                        <span style="margin-left: 15px; color: #7f8c8d;">${t.type === 'income' ? 'Zarobek' : 'Strata'}</span>
+                    </div>
+                    <div>
+                        <strong class="${colorClass}">${sign}${t.amount.toFixed(2)} zł</strong>
+                        <button class="btn-delete" onclick="deleteTransaction(${t.id})" style="margin-left: 15px;">Usuń</button>
+                    </div>
+                `;
+                historyList.appendChild(li);
+            });
+        }
+
+        // Obliczanie podsumowań (Dzienne, Tygodniowe, Miesięczne)
+        function calculateSummaries() {
+            const dzisiaj = new Date();
+            const dzisiejszaDataStr = dzisiaj.toISOString().split('T')[0];
+            const aktualnyMiesiacStr = dzisiejszaDataStr.substring(0, 7); // YYYY-MM
+            
+            let sumaDzienna = 0;
+            let sumaTygodniowa = 0;
+            let sumaMiesieczna = 0;
+
+            transactions.forEach(t => {
+                const dataTransakcji = new Date(t.date);
+                const kwota = t.type === 'income' ? t.amount : -t.amount;
+
+                // Sprawdzanie czy to dzisiaj
+                if (t.date === dzisiejszaDataStr) {
+                    sumaDzienna += kwota;
+                }
+
+                // Sprawdzanie czy to ostatnie 7 dni
+                const roznicaCzasu = dzisiaj.getTime() - dataTransakcji.getTime();
+                const roznicaDni = roznicaCzasu / (1000 * 3600 * 24);
+                // Pozwalamy na daty z przyszłości lub do 7 dni w tył
+                if (roznicaDni >= -1 && roznicaDni <= 7) { 
+                    sumaTygodniowa += kwota;
+                }
+
+                // Sprawdzanie czy to ten sam miesiąc
+                if (t.date.startsWith(aktualnyMiesiacStr)) {
+                    sumaMiesieczna += kwota;
+                }
+            });
+
+            // Formatowanie i wyświetlanie na ekranie
+            document.getElementById('sum-daily').innerText = `${sumaDzienna.toFixed(2)} zł`;
+            document.getElementById('sum-daily').className = `amount ${sumaDzienna >= 0 ? 'positive' : 'negative'}`;
+
+            document.getElementById('sum-weekly').innerText = `${sumaTygodniowa.toFixed(2)} zł`;
+            document.getElementById('sum-weekly').className = `amount ${sumaTygodniowa >= 0 ? 'positive' : 'negative'}`;
+
+            document.getElementById('sum-monthly').innerText = `${sumaMiesieczna.toFixed(2)} zł`;
+            document.getElementById('sum-monthly').className = `amount ${sumaMiesieczna >= 0 ? 'positive' : 'negative'}`;
+        }
+
+        // Uruchom podczas pierwszego wczytania strony
+        updateUI();
+    </script>
+</body>
+</html>
